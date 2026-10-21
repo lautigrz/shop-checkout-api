@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: shop
+      POSTGRES_USER: shop
+      POSTGRES_PASSWORD: shop
+    ports:
+      - "5432:5432"
+    command: >
+      bash -c "ln -sf Argentina/Buenos_Aires /usr/share/zoneinfo/America/Buenos_Aires && exec docker-entrypoint.sh postgres"
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"

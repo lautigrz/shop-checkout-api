@@ -23,8 +23,8 @@ spring:
     locations: classpath:db/migration
 
   jwt:
-    secret-key: "${JWT_SECRET_KEY}"
-    expiration-time: "${JWT_EXPIRATION}"
+    secret-key: ${JWT_SECRET_KEY:default-secret-key}
+    expiration-time: ${JWT_EXPIRATION_TIME:36000}
   mongodb:
     uri: mongodb://localhost:27017/shop
 

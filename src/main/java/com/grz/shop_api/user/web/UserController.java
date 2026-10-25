@@ -32,6 +32,7 @@ public class UserController {
     @GetMapping("/me")
     @Operation(summary = "Obtener perfil del usuario autenticado")
     public ResponseEntity<UserResponse> getProfile(@AuthenticationPrincipal UserPrincipal principal) {
+
         return ResponseEntity.ok(userService.getById(principal.getId()));
     }
 

@@ -18,10 +18,8 @@ spring:
   flyway:
     enabled: false # En tests unitarios/slice con H2 se usa Hibernate ddl-auto: create-drop
 
-  data:
-    mongodb:
-      uri: mongodb://localhost:27017/shop_test
-
   jwt:
     secret-key: "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
     expiration-time: 3600000
+  mongodb:
+    uri: mongodb://localhost:27017/shop_test

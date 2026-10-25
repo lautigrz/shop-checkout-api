@@ -1,0 +1,119 @@
+
+name: Deploy to EC2
+
+on:
+  workflow_run:
+    workflows: ["Build and Test"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  S3_BUCKET: shop-checkout-api-deploy-295392291513
+  S3_KEY: releases/shop-api.jar
+  EC2_INSTANCE_ID: i-0122e8d584139b10e
+
+jobs:
+  deploy:
+    name: Deploy Spring Boot to EC2
+    # No desplegar si el workflow de build falló.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download JAR artifact from Build and Test
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: shop-api-jar
+          path: target/
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Set up JDK 21
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - name: Build JAR for manual deployment
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          chmod +x mvnw
+          ./mvnw clean package -DskipTests -B --no-transfer-progress
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload JAR to S3
+        run: |
+          test -f target/shop-api-0.0.1-SNAPSHOT.jar
+          aws s3 cp \
+            target/shop-api-0.0.1-SNAPSHOT.jar \
+            "s3://${S3_BUCKET}/${S3_KEY}"
+
+      - name: Upload Docker files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "Dockerfile,docker-compose.prod.yaml"
+          target: "/home/ubuntu/shop-api"
+
+      - name: Deploy application over SSH
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+          S3_BUCKET: ${{ env.S3_BUCKET }}
+          S3_KEY: ${{ env.S3_KEY }}
+          RDS_JDBC_URL: ${{ secrets.RDS_JDBC_URL }}
+          RDS_USERNAME: ${{ secrets.RDS_USERNAME }}
+          RDS_PASSWORD: ${{ secrets.RDS_PASSWORD }}
+          MONGO_ATLAS_URI: ${{ secrets.MONGO_ATLAS_URI }}
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: AWS_REGION,S3_BUCKET,S3_KEY,RDS_JDBC_URL,RDS_USERNAME,RDS_PASSWORD,MONGO_ATLAS_URI,JWT_SECRET_KEY
+          script: |
+            set -eu
+
+            APP_DIR="/home/ubuntu/shop-api"
+            mkdir -p "$APP_DIR/target" "$APP_DIR/certs"
+            cd "$APP_DIR"
+
+            aws s3 cp "s3://${S3_BUCKET}/${S3_KEY}" \
+              target/shop-api-0.0.1-SNAPSHOT.jar \
+              --region "$AWS_REGION"
+
+            chmod 600 /dev/null 2>/dev/null || true
+
+            umask 077
+            printf '%s\n' \
+              "RDS_JDBC_URL=$RDS_JDBC_URL" \
+              "RDS_USERNAME=$RDS_USERNAME" \
+              "RDS_PASSWORD=$RDS_PASSWORD" \
+              "MONGO_ATLAS_URI=$MONGO_ATLAS_URI" \
+              "JWT_SECRET_KEY=$JWT_SECRET_KEY" \
+              > .env
+
+            docker compose -f docker-compose.prod.yaml up -d --build
+            docker image prune -f

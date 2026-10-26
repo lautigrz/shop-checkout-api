@@ -12,6 +12,7 @@ import com.grz.shop_api.order.web.dto.CheckoutRequest;
 import com.grz.shop_api.order.web.dto.CheckoutResponse;
 import com.grz.shop_api.order.web.dto.OrderItemRequest;
 import com.grz.shop_api.order.web.dto.OrderResponse;
+import com.grz.shop_api.order.web.dto.OrderStatusUpdateRequest;
 import com.grz.shop_api.order.web.dto.PaymentDetailsDto;
 import com.grz.shop_api.common.security.UserPrincipal;
 import com.grz.shop_api.user.domain.Role;
@@ -136,5 +137,49 @@ class OrderControllerTest {
         mockMvc.perform(get("/api/v1/orders/" + orderId))
                  .andExpect(status().isOk())
                  .andExpect(jsonPath("$.orderNumber").value("ORD-999"));
+    }
+
+    @Test
+    @DisplayName("GET /my-orders: Debe retornar lista de pedidos del usuario autenticado")
+    void getMyOrders_shouldReturnOrdersList() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        OrderResponse orderRes = new OrderResponse(orderId, "ORD-999", UUID.randomUUID(), new BigDecimal("50.00"), BigDecimal.ZERO, new BigDecimal("50.00"), OrderStatus.PAID, PaymentMethod.TRANSFER, null, "Direccion", List.of(), Instant.now(), Instant.now());
+        when(orderService.getUserOrders(any(UUID.class))).thenReturn(List.of(orderRes));
+
+        mockMvc.perform(get("/api/v1/orders/my-orders"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size()").value(1))
+                .andExpect(jsonPath("$[0].orderNumber").value("ORD-999"));
+    }
+
+    @Test
+    @DisplayName("PATCH /{id}/status: Debe actualizar el estado del pedido")
+    void updateStatus_shouldReturnUpdatedOrder() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        OrderStatusUpdateRequest updateReq = new OrderStatusUpdateRequest(OrderStatus.SHIPPED, "Despachado en correo");
+        OrderResponse orderRes = new OrderResponse(orderId, "ORD-999", UUID.randomUUID(), new BigDecimal("50.00"), BigDecimal.ZERO, new BigDecimal("50.00"), OrderStatus.SHIPPED, PaymentMethod.TRANSFER, null, "Direccion", List.of(), Instant.now(), Instant.now());
+
+        when(orderService.updateStatus(orderId, OrderStatus.SHIPPED, "Despachado en correo")).thenReturn(orderRes);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/v1/orders/" + orderId + "/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateReq)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SHIPPED"));
+    }
+
+    @Test
+    @DisplayName("GET /{id}/audit: Debe retornar historial de auditoría de MongoDB")
+    void getAuditHistory_shouldReturnAuditList() throws Exception {
+        UUID orderId = UUID.randomUUID();
+        com.grz.shop_api.order.web.dto.AuditLogResponse auditLog = new com.grz.shop_api.order.web.dto.AuditLogResponse(
+                "log-1", orderId.toString(), "ORD-999", "ORDER_CREATED", "CREATED", "Creado", java.util.Map.of(), Instant.now()
+        );
+        when(orderService.getOrderAuditHistory(orderId)).thenReturn(List.of(auditLog));
+
+        mockMvc.perform(get("/api/v1/orders/" + orderId + "/audit"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size()").value(1))
+                .andExpect(jsonPath("$[0].eventType").value("ORDER_CREATED"));
     }
 }

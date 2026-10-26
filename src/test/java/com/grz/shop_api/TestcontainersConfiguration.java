@@ -8,18 +8,18 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 @TestConfiguration(proxyBeanMethods = false)
-class TestcontainersConfiguration {
+public class TestcontainersConfiguration {
 
 	@Bean
 	@ServiceConnection
 	MongoDBContainer mongoDbContainer() {
-		return new MongoDBContainer(DockerImageName.parse("mongo:latest"));
+		return new MongoDBContainer(DockerImageName.parse("mongo:7"));
 	}
 
 	@Bean
 	@ServiceConnection
 	PostgreSQLContainer postgresContainer() {
-		return new PostgreSQLContainer(DockerImageName.parse("postgres:latest"));
+		return new PostgreSQLContainer(DockerImageName.parse("postgres:16-alpine"));
 	}
 
 }
